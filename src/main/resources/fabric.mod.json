@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "soundmanager",
+  "version": "${version}",
+  "name": "SoundManager",
+  "description": "Precise client-side sound control driven by the SoundManagerPlugin server plugin: start offset, end point, fades, pause/resume, seek.",
+  "authors": [],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "net.dvmn2.soundmanager.client.SoundManagerClient"
+    ]
+  },
+  "mixins": [
+    {
+      "config": "soundmanager.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
