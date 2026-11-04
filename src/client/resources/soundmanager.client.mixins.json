@@ -1,9 +1,12 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "net.dvmn2.soundmanager.mixin.client",
+  "package": "net.dvmn2.soundmanager.client.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "SoundManagerAccessor",
+    "SoundSystemAccessor",
+    "SourceAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

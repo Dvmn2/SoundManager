@@ -1,3 +1,7 @@
 {
-  "soundmanager.stopped": "SoundManager: all managed sounds stopped."
+  "soundmanager.off": "SoundManager: disabled, all managed sounds stopped.",
+  "soundmanager.on": "SoundManager: enabled.",
+  "soundmanager.status": "SoundManager: %s, active sounds: %s, max volume: %s.",
+  "soundmanager.state.enabled": "enabled",
+  "soundmanager.state.disabled": "disabled"
 }

@@ -5,6 +5,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.sound.Channel;
 import net.minecraft.client.sound.MovingSoundInstance;
 import net.minecraft.client.sound.SoundInstance;
+import net.minecraft.client.sound.Source;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
 import net.minecraft.sound.SoundEvent;
@@ -14,37 +15,38 @@ import org.lwjgl.openal.AL10;
 import org.lwjgl.openal.AL11;
 
 /**
- * Звук с точным управлением: старт с места, конец, fade in/out, плавное изменение громкости/высоты, перемотка.
+ * Sound with precise control: start offset, end point, fade in/out, smooth volume and pitch changes, seeking.
  * <p>
- * Как это работает:
+ * Created and controlled on the client thread; only the seek flags are also written from the sound engine thread.
  * <ul>
- *   <li>Есть собственная «шкала времени» {@link #posSec}: она идёт в реальном времени, умноженном на pitch.
- *       По ней проверяется конец и считаются fade'ы (точность — один клиентский тик, 50 мс).</li>
- *   <li>Старт с середины и перемотка делаются через {@code alSourcef(AL_SEC_OFFSET)} на OpenAL-источнике.
- *       Пока перемотка не выполнена, звук тихий (MIN_VOLUME), чтобы не было слышно начало с нуля.</li>
+ *   <li>The sound keeps its own timeline {@link #posSec}, advanced by real time multiplied by pitch. The end
+ *       point and the fades are computed from it (accuracy: one client tick, 50 ms).</li>
+ *   <li>Starting from the middle and seeking use {@code alSourcef(AL_SEC_OFFSET)} on the OpenAL source. Until the
+ *       seek is done the sound stays almost silent ({@link #MIN_VOLUME}) so the beginning is not heard.</li>
  * </ul>
  */
 public final class ManagedSound extends MovingSoundInstance {
 
-    /** Ненулевой минимум: при нулевой громкости SoundSystem вообще не запускает звук. */
+    /** Non-zero minimum: the sound system does not start a sound with zero volume at all. */
     private static final float MIN_VOLUME = 0.0001f;
-    /** Сколько тиков ждём успешной перемотки, потом сдаёмся и останавливаем звук. */
+    /** Ticks to wait for a successful seek before giving up and stopping the sound. */
     private static final int SEEK_TIMEOUT_TICKS = 100;
-    /** Сколько тиков звук привязанной сущности может «отсутствовать» на клиенте. */
+    /** Ticks an entity-bound sound may stay without its entity on the client. */
     private static final int ENTITY_MISSING_TICKS = 40;
+    private static final double NANOS_PER_SECOND = 1_000_000_000.0;
+    private static final double NANOS_PER_MS = 1_000_000.0;
+    private static final double MS_PER_SECOND = 1000.0;
 
     private final PlayParams params;
     private final Ramp volumeRamp;
     private final Ramp pitchRamp;
 
-    // --- шкала времени ---
     private double posSec;
     private long lastNs;
     private int ticksAlive;
     private int waitTicks;
     private int missingTicks;
 
-    // --- перемотка (флаги пишутся и из потока звукового движка) ---
     private volatile boolean ready;
     private volatile boolean seekFailed;
     private volatile boolean seekInFlight;
@@ -62,7 +64,7 @@ public final class ManagedSound extends MovingSoundInstance {
 
         long now = System.nanoTime();
         this.lastNs = now;
-        this.posSec = params.startMs() / 1000.0;
+        this.posSec = params.startMs() / MS_PER_SECOND;
         this.volumeRamp = new Ramp(params.volume());
         this.pitchRamp = new Ramp(params.pitch());
         this.pitch = params.pitch();
@@ -85,7 +87,7 @@ public final class ManagedSound extends MovingSoundInstance {
             }
         }
 
-        // Если стартуем с нуля — перемотка не нужна.
+        // Starting from zero needs no seek.
         this.ready = params.startMs() <= 0;
         if (this.ready) {
             this.fadeInStarted = true;
@@ -94,47 +96,23 @@ public final class ManagedSound extends MovingSoundInstance {
         this.volume = computeVolume(now);
     }
 
-    // ------------------------------------------------------------------
-    // Тик
-    // ------------------------------------------------------------------
+    // ---------- Tick ----------
 
     @Override
     public void tick() {
         long now = System.nanoTime();
-
-        float p = clampPitch(pitchRamp.get(now));
-        this.pitch = p;
-
-        double dt = (now - lastNs) / 1_000_000_000.0;
-        lastNs = now;
-        posSec += dt * p;
-        ticksAlive++;
-        waitTicks++;
+        advanceTimeline(now);
 
         if (params.mode() == PlayParams.Mode.ENTITY) {
             followEntity();
-            if (isDone()) {
-                return;
-            }
         }
-
-        long posMs = (long) (posSec * 1000.0);
-        if (params.endMs() >= 0 && posMs >= params.endMs()) {
-            setDone();
-            return;
-        }
-        if (stopStartNs >= 0 && now - stopStartNs >= stopFadeNs) {
-            setDone();
-            return;
-        }
-        if (seekFailed) {
-            // Позиция за пределами звука или OpenAL отказал.
+        if (isDone() || hasFinished(now)) {
             setDone();
             return;
         }
 
         if (!ready) {
-            if (waitTicks > SEEK_TIMEOUT_TICKS) {
+            if (waitTicks > SEEK_TIMEOUT_TICKS || !SoundController.isSeekSupported()) {
                 setDone();
                 return;
             }
@@ -147,16 +125,38 @@ public final class ManagedSound extends MovingSoundInstance {
         this.volume = computeVolume(now);
     }
 
+    private void advanceTimeline(long now) {
+        float currentPitch = clampPitch(pitchRamp.get(now));
+        this.pitch = currentPitch;
+        double dtSec = (now - lastNs) / NANOS_PER_SECOND;
+        lastNs = now;
+        posSec += dtSec * currentPitch;
+        ticksAlive++;
+        waitTicks++;
+    }
+
+    private boolean hasFinished(long now) {
+        long posMs = (long) (posSec * MS_PER_SECOND);
+        if (params.endMs() >= 0 && posMs >= params.endMs()) {
+            return true;
+        }
+        if (stopStartNs >= 0 && now - stopStartNs >= stopFadeNs) {
+            return true;
+        }
+        // The seek position is outside the sound or OpenAL refused it.
+        return seekFailed;
+    }
+
     private float computeVolume(long now) {
         if (!ready) {
             return MIN_VOLUME;
         }
         float v = volumeRamp.get(now);
         if (params.fadeInMs() > 0 && fadeInStarted) {
-            v *= (float) clamp01((now - fadeInStartNs) / (params.fadeInMs() * 1_000_000.0));
+            v *= (float) clamp01((now - fadeInStartNs) / (params.fadeInMs() * NANOS_PER_MS));
         }
         if (params.endMs() >= 0 && params.fadeOutMs() > 0) {
-            double posMs = posSec * 1000.0;
+            double posMs = posSec * MS_PER_SECOND;
             v *= (float) clamp01((params.endMs() - posMs) / params.fadeOutMs());
         }
         if (stopStartNs >= 0 && stopFadeNs > 0) {
@@ -182,64 +182,75 @@ public final class ManagedSound extends MovingSoundInstance {
         }
     }
 
-    // ------------------------------------------------------------------
-    // Перемотка через OpenAL
-    // ------------------------------------------------------------------
+    // ---------- Seeking through OpenAL ----------
 
     private void trySeek() {
         if (seekInFlight) {
             return;
         }
-        Channel.SourceManager manager = SoundController.sourceFor(this);
+        Channel.SourceManager manager;
+        try {
+            manager = SoundController.sourceFor(this);
+        } catch (RuntimeException | LinkageError ex) {
+            SoundController.onSeekUnavailable(ex);
+            setDone();
+            return;
+        }
         if (manager == null) {
-            return; // SoundSystem ещё не создал источник
+            return; // the sound system has not created the source yet
         }
         final int generation = seekGeneration;
         final float target = (float) posSec;
         seekInFlight = true;
-        // run() исполняется в потоке звукового движка — там есть OpenAL-контекст.
+        // run() executes on the sound engine thread, the only one with an OpenAL context.
         manager.run(source -> {
             try {
-                int pointer = ((SourceAccessor) (Object) source).soundmanager$getPointer();
-                if (AL10.alGetSourcei(pointer, AL10.AL_SOURCE_STATE) != AL10.AL_PLAYING) {
-                    return; // буфер ещё грузится — попробуем на следующем тике
-                }
-                AL10.alGetError(); // сбросить старую ошибку
-                AL10.alSourcef(pointer, AL11.AL_SEC_OFFSET, target);
-                if (AL10.alGetError() != AL10.AL_NO_ERROR) {
-                    seekFailed = true;
-                } else if (generation == seekGeneration) {
-                    ready = true;
-                }
+                seekSource(source, generation, target);
+            } catch (RuntimeException | LinkageError ex) {
+                SoundController.onSeekUnavailable(ex);
+                seekFailed = true;
             } finally {
                 seekInFlight = false;
             }
         });
     }
 
-    // ------------------------------------------------------------------
-    // Управление (вызывается из основного потока клиента)
-    // ------------------------------------------------------------------
+    private void seekSource(Source source, int generation, float targetSec) {
+        int pointer = ((SourceAccessor) (Object) source).soundmanager$getPointer();
+        if (AL10.alGetSourcei(pointer, AL10.AL_SOURCE_STATE) != AL10.AL_PLAYING) {
+            return; // the buffer is still loading; try again on the next tick
+        }
+        AL10.alGetError(); // clear a stale error
+        AL10.alSourcef(pointer, AL11.AL_SEC_OFFSET, targetSec);
+        if (AL10.alGetError() != AL10.AL_NO_ERROR) {
+            seekFailed = true;
+        } else if (generation == seekGeneration) {
+            ready = true;
+        }
+    }
 
-    /** Перемотать на позицию (мс). Звук на мгновение тихий, пока OpenAL не выполнит перемотку. */
+    // ---------- Control (client thread) ----------
+
+    /** Seeks to the position in milliseconds. The sound is almost silent until OpenAL performs the seek. */
     public void seek(long positionMs) {
-        posSec = Math.max(0, positionMs) / 1000.0;
+        posSec = Math.max(0, positionMs) / MS_PER_SECOND;
         seekGeneration++;
         ready = false;
         waitTicks = 0;
         this.volume = MIN_VOLUME;
     }
 
-    /** Плавно (или сразу, если rampMs = 0) привести громкость к значению. */
+    /** Moves the volume to the target, smoothly over {@code rampMs} (0 = immediately). */
     public void setVolumeTarget(float target, int rampMs) {
         volumeRamp.retarget(target, rampMs, System.nanoTime());
     }
 
+    /** Moves the pitch to the target, smoothly over {@code rampMs} (0 = immediately). */
     public void setPitchTarget(float target, int rampMs) {
         pitchRamp.retarget(clampPitch(target), rampMs, System.nanoTime());
     }
 
-    /** Остановить с затуханием (0 = сразу). */
+    /** Stops with a fade-out of {@code fadeMs} (0 = immediately). */
     public void stopWithFade(int fadeMs) {
         if (fadeMs <= 0) {
             cancel();
@@ -247,21 +258,21 @@ public final class ManagedSound extends MovingSoundInstance {
         }
         if (stopStartNs < 0) {
             stopStartNs = System.nanoTime();
-            stopFadeNs = fadeMs * 1_000_000L;
+            stopFadeNs = fadeMs * (long) NANOS_PER_MS;
         }
     }
 
-    /** Немедленная остановка. */
+    /** Stops immediately. */
     public void cancel() {
         setDone();
         MinecraftClient.getInstance().getSoundManager().stop(this);
     }
 
-    /** Состояние для возобновления после паузы: старт = текущая позиция, без fade-in. */
+    /** State for resuming after a pause: starts at the current position, without fade-in. */
     public PlayParams snapshot() {
-        return new PlayParams(params.sound(), params.category(), volumeRamp.to, pitchRamp.to,
+        return new PlayParams(params.sound(), params.category(), volumeRamp.target(), pitchRamp.target(),
                 params.mode(), this.x, this.y, this.z, params.entityId(),
-                (long) (posSec * 1000.0), params.endMs(), 0, params.fadeOutMs());
+                (long) (posSec * MS_PER_SECOND), params.endMs(), 0, params.fadeOutMs());
     }
 
     public Identifier soundId() {
@@ -272,40 +283,13 @@ public final class ManagedSound extends MovingSoundInstance {
         return ticksAlive;
     }
 
-    // ------------------------------------------------------------------
+    // ---------- Helpers ----------
 
-    private static float clampPitch(float p) {
-        return Math.max(0.5f, Math.min(2.0f, p));
+    private static float clampPitch(float pitch) {
+        return Math.max(PlayParams.MIN_PITCH, Math.min(PlayParams.MAX_PITCH, pitch));
     }
 
-    private static double clamp01(double v) {
-        return v < 0 ? 0 : (v > 1 ? 1 : v);
-    }
-
-    /** Линейный переход значения во времени. */
-    private static final class Ramp {
-        float from;
-        float to;
-        long startNs;
-        long durNs;
-
-        Ramp(float value) {
-            this.from = value;
-            this.to = value;
-        }
-
-        float get(long now) {
-            if (durNs <= 0 || now >= startNs + durNs) {
-                return to;
-            }
-            return from + (to - from) * ((now - startNs) / (float) durNs);
-        }
-
-        void retarget(float target, int durMs, long now) {
-            this.from = get(now);
-            this.to = target;
-            this.startNs = now;
-            this.durNs = Math.max(0, durMs) * 1_000_000L;
-        }
+    private static double clamp01(double value) {
+        return value < 0 ? 0 : Math.min(value, 1);
     }
 }

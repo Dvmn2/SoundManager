@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 
 import java.util.Map;
 
-/** Карта «играющий звук -> менеджер OpenAL-источника». */
+/** Exposes the map "playing sound instance to OpenAL source manager". */
 @Mixin(SoundSystem.class)
 public interface SoundSystemAccessor {
 

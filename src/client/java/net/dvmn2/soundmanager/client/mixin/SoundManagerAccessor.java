@@ -5,7 +5,7 @@ import net.minecraft.client.sound.SoundSystem;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
-/** Доступ к внутренней SoundSystem (нужна, чтобы найти OpenAL-источник нашего звука). */
+/** Exposes the internal {@link SoundSystem}, needed to find the OpenAL source of a managed sound. */
 @Mixin(SoundManager.class)
 public interface SoundManagerAccessor {
 

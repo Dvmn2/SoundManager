@@ -3,10 +3,16 @@ package net.dvmn2.soundmanager.client.sound;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.util.Identifier;
 
-/** Неизменяемое описание запуска звука. Времена — в миллисекундах. */
-public record PlayParams(Identifier sound, SoundCategory category, float volume, float pitch,
-                         Mode mode, double x, double y, double z, int entityId,
-                         long startMs, long endMs, int fadeInMs, int fadeOutMs) {
+/** Immutable description of a sound start. All times are in milliseconds. */
+public record PlayParams(
+        Identifier sound, SoundCategory category, float volume, float pitch,
+        Mode mode, double x, double y, double z, int entityId,
+        long startMs, long endMs, int fadeInMs, int fadeOutMs) {
+
+    public static final float MIN_PITCH = 0.5f;
+    public static final float MAX_PITCH = 2.0f;
+    /** Upper bound for fade and transition lengths, milliseconds. */
+    public static final int MAX_FADE_MS = 600_000;
 
     public enum Mode {
         GLOBAL, POSITION, ENTITY;

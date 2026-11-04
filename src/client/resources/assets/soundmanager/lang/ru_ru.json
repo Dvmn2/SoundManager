@@ -1,3 +1,7 @@
 {
-  "soundmanager.stopped": "SoundManager: все управляемые звуки остановлены."
+  "soundmanager.off": "SoundManager: выключен, все управляемые звуки остановлены.",
+  "soundmanager.on": "SoundManager: включён.",
+  "soundmanager.status": "SoundManager: %s, активных звуков: %s, максимальная громкость: %s.",
+  "soundmanager.state.enabled": "включён",
+  "soundmanager.state.disabled": "выключен"
 }

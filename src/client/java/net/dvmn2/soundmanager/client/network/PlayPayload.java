@@ -6,25 +6,28 @@ import net.minecraft.network.packet.CustomPayload;
 import net.minecraft.util.Identifier;
 
 /**
- * Payload от плагина (канал {@code dvmn2:sm_play}): запустить звук.
+ * S2C {@code dvmn2:sm_play}: start a sound.
  * <pre>
  * VarInt  protocol
- * String  sound        (namespace:path, как в sounds.json)
- * String  category     (master/music/record/weather/block/hostile/neutral/player/ambient/voice/ui)
+ * String  sound        (namespace:path as in sounds.json, max 256 bytes)
+ * String  category     (master/music/record/weather/block/hostile/neutral/player/ambient/voice/ui, max 32 bytes)
  * Float   volume
  * Float   pitch
- * VarInt  mode         (0 = глобальный, 1 = в точке, 2 = привязан к сущности)
- * Double  x, y, z      (mode 1: позиция; mode 2: стартовая позиция сущности; иначе 0)
- * VarInt  entityId     (mode 2: сетевой id сущности; иначе 0)
- * Long    startMs      (с какого места начать, мс)
- * Long    endMs        (на каком месте закончить, мс; -1 = играть до конца)
+ * VarInt  mode         (0 = global, 1 = at a position, 2 = attached to an entity)
+ * Double  x, y, z      (mode 1: position; mode 2: initial entity position; otherwise 0)
+ * VarInt  entityId     (mode 2: network entity id; otherwise 0)
+ * Long    startMs      (offset to start from, milliseconds)
+ * Long    endMs        (offset to stop at, milliseconds; -1 = play to the end)
  * VarInt  fadeInMs
- * VarInt  fadeOutMs    (затухание ПЕРЕД endMs)
+ * VarInt  fadeOutMs    (fade that ends exactly at endMs)
  * </pre>
  */
 public record PlayPayload(int protocol, String sound, String category, float volume, float pitch,
                           int mode, double x, double y, double z, int entityId,
                           long startMs, long endMs, int fadeInMs, int fadeOutMs) implements CustomPayload {
+
+    private static final int MAX_SOUND_BYTES = 256;
+    private static final int MAX_CATEGORY_BYTES = 32;
 
     public static final CustomPayload.Id<PlayPayload> ID =
             new CustomPayload.Id<>(Identifier.of("dvmn2", "sm_play"));
@@ -48,8 +51,8 @@ public record PlayPayload(int protocol, String sound, String category, float vol
             },
             buf -> new PlayPayload(
                     buf.readVarInt(),
-                    buf.readString(256),
-                    buf.readString(32),
+                    buf.readString(MAX_SOUND_BYTES),
+                    buf.readString(MAX_CATEGORY_BYTES),
                     buf.readFloat(),
                     buf.readFloat(),
                     buf.readVarInt(),
@@ -60,8 +63,7 @@ public record PlayPayload(int protocol, String sound, String category, float vol
                     buf.readLong(),
                     buf.readLong(),
                     buf.readVarInt(),
-                    buf.readVarInt())
-    );
+                    buf.readVarInt()));
 
     @Override
     public Id<? extends CustomPayload> getId() {

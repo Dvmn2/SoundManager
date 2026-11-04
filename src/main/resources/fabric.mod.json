@@ -4,18 +4,16 @@
   "version": "${version}",
   "name": "SoundManager",
   "description": "Precise client-side sound control driven by the SoundManagerPlugin server plugin: start offset, end point, fades, pause/resume, seek.",
-  "authors": [],
+  "authors": ["DVMN2"],
   "contact": {},
   "license": "All-Rights-Reserved",
   "environment": "client",
   "entrypoints": {
-    "client": [
-      "net.dvmn2.soundmanager.client.SoundManagerClient"
-    ]
+    "client": ["net.dvmn2.soundmanager.client.SoundManagerClient"]
   },
   "mixins": [
     {
-      "config": "soundmanager.mixins.json",
+      "config": "soundmanager.client.mixins.json",
       "environment": "client"
     }
   ],

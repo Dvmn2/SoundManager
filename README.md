@@ -1,44 +1,77 @@
-# SoundManager (Fabric, клиент) — Minecraft 1.21.11
+# SoundManager
 
-Клиентский мод: точное управление звуками по командам плагина SoundManagerPlugin. Звуки берутся из обычных ресурспаков
-(`sounds.json`) — например, тех, что раздаёт ResourceControl.
+Fabric client mod that plays and controls sounds on command from a server plugin: start offset, end point, fades, pause/resume, seek, smooth volume and pitch changes. Companion plugin: `SoundManagerPlugin`.
 
-## Возможности
+## Requirements
 
-- старт с любого места (`startMs`), конец на любом месте (`endMs`)
-- fade in / fade out, остановка с затуханием
-- pause / resume, seek (перемотка играющего звука)
-- плавное изменение громкости и высоты
-- глобальный звук, звук из точки мира, звук, привязанный к сущности
-- `/smstop` (клиентская команда) — аварийно остановить все управляемые звуки
+- Minecraft 1.21.11, Java 21
+- Fabric Loader >= 0.19.5 and Fabric API (versions are set in `gradle.properties`)
+- Companion plugin `SoundManagerPlugin` >= 2.0.0 (the mod does nothing without it)
 
-## Как работает перемотка
+## Build and run
 
-Звук запускается обычным `SoundManager.play()`, затем на его OpenAL-источнике выставляется `AL_SEC_OFFSET`. Пока
-перемотка не выполнена, звук играет на громкости 0.0001 (неслышно). Старт с позиции X поэтому начинается с задержкой 1–3
-тика, но звучит уже с нужного места (задержка компенсируется). Конец и fade'ы считаются по собственной шкале времени с
-точностью до клиентского тика (50 мс).
+```bash
+./gradlew build      # build/libs/SoundManager-<version>.jar
+./gradlew runClient  # Minecraft 1.21.11 test client
+```
 
-## Требования к звукам
+## Architecture
 
-- Для перемотки/старта с места звук должен быть **коротким и НЕ стримовым** (в `sounds.json` не ставить
-  `"stream": true`).
-- Для `playat` / `playon` (позиционные звуки) ogg должен быть **моно** — стерео в Minecraft не затухает с расстоянием.
+```text
+src/client/java/net/dvmn2/soundmanager/client
+├── SoundManagerClient.java      // ClientModInitializer
+├── SoundManagerConfig.java      // player-side config
+├── command/                     // client command /sm
+├── mixin/                       // accessors
+├── network/                     // payload records
+└── sound/                       // managed sounds
+```
 
-## Протокол (канал → плагин шлёт, мод принимает)
+| Class | Responsibility |
+|---|---|
+| `SoundManagerClient` | entry point: registers payloads, receivers, tick and disconnect events, `/sm` |
+| `SoundManagerConfig` | `config/soundmanager.json`: `enabled`, `maxVolume`; loaded lazily and saved atomically |
+| `SoundManagerCommand` | `/sm off`, `/sm on`, `/sm status` |
+| `SoundController` | registry of active and paused sounds, packet handling, seek-availability flag |
+| `ManagedSound` | `MovingSoundInstance` with its own timeline, fades, ramps and OpenAL seeking |
+| `PlayParams` | immutable description of a sound start (`record`) |
+| `Ramp` | linear transition of a value over time |
+| `PlayPayload`, `ControlPayload` | packet records, format in their Javadoc |
+| `SoundManagerAccessor`, `SoundSystemAccessor`, `SourceAccessor` | accessors used to reach the OpenAL source of a playing sound |
 
-См. javadoc в `network/PlayPayload.java` (`dvmn2:sm_play`) и `network/ControlPayload.java` (`dvmn2:sm_ctl`). Версия
-протокола — 1 (первым VarInt). Мод определяется плагином по зарегистрированным каналам.
+Threading: packets are handled on the client thread (`context.client().execute`). `SoundController` state is touched on the client thread only. `ManagedSound` seek flags are `volatile` because the seek runs on the sound engine thread.
 
-## Сборка
+Lifecycle: `onInitializeClient` loads the config, registers payloads and receivers (this also announces the mod to the server), then tick, disconnect and command hooks. On disconnect all managed sounds are stopped and paused sounds are forgotten.
 
-В присланном ResourceControl.zip не было build.gradle, поэтому `../../../../../Users/PC/Downloads/tmp/build.gradle`
-здесь — шаблон. Лучше взять ваш рабочий build.gradle от ResourceControl, оставив из этого проекта
-`../../../../../Users/PC/Downloads/tmp/gradle.properties`
-(поменяв только `archives_base_name`). Также скопируйте `gradlew` и папку `gradle/` оттуда.
+## Public API
 
-## Что проверить при первой сборке (не компилировалось — в среде нет доступа к Maven)
+None.
 
-Три accessor-миксина обращаются к приватным полям по Yarn-именам 1.21.11:
-`SoundManager.soundSystem`, `SoundSystem.sources`, `Source.pointer`, а код использует `Channel.SourceManager#run`. Если
-какое-то имя в вашем Yarn отличается — это единственные места, где потребуется правка.
+## Protocol
+
+| Channel | Direction | Protocol | Format |
+|---|---|---|---|
+| `dvmn2:sm_play` | S2C | 1 | `PlayPayload` Javadoc |
+| `dvmn2:sm_ctl` | S2C | 1 | `ControlPayload` Javadoc |
+
+The first field of every packet is the protocol version. A packet with a different version is ignored silently. The mod never sends packets to the server. Plugin and mod are compatible when their protocol versions match; the artifact version is independent of it.
+
+## Data and files
+
+| File | Content |
+|---|---|
+| `config/soundmanager.json` | `enabled` (boolean, default `true`), `maxVolume` (number `0.0..10.0`, default `10.0`) |
+
+The file is created on first start. Unreadable or invalid files fall back to defaults with a log warning; `maxVolume` is clamped after loading. No cache and no downloads.
+
+## Conventions and constraints
+
+- The mod only plays sounds that already exist in the game or in the player's resource packs; nothing is downloaded.
+- Seeking relies on internal classes of the sound system (`SoundSystem.sources`, `Source.pointer`) and on `alSourcef(AL_SEC_OFFSET)`. If this access fails once, seeking is disabled for the session, the cause is logged once, and sounds that need a start offset (including resuming a paused sound) are skipped.
+- Volume is capped by the player's `maxVolume`; the server cannot bypass it. `/sm off` stops all managed sounds and ignores every packet until `/sm on`.
+- A sound with zero volume is never started by Minecraft, so a tiny non-zero minimum volume is used while a seek is pending.
+- Accessor members use the `soundmanager$` prefix; the mixin config lists every class of the mixin package.
+
+## License
+
+All Rights Reserved.
