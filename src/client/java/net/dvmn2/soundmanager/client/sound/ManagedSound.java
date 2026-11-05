@@ -283,6 +283,11 @@ public final class ManagedSound extends MovingSoundInstance {
         return ticksAlive;
     }
 
+    /** Current position on the timeline of the sound (affected by pitch), milliseconds. */
+    public long positionMs() {
+        return (long) (posSec * MS_PER_SECOND);
+    }
+
     // ---------- Helpers ----------
 
     private static float clampPitch(float pitch) {

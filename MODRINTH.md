@@ -11,12 +11,13 @@ Client mod that lets a server play music and sound effects with precise control:
 - Sounds that play everywhere, at a place in the world, or follow an entity
 - Respects your volume sliders and your own volume cap
 - Emergency switch that stops everything at once
+- A window where you set every option of a sound, listen to it yourself and then send it to other players
 
 ## Requirements
 
 - Minecraft 1.21.11
 - Fabric Loader and Fabric API
-- The server needs the SoundManagerPlugin plugin for these features; without it the mod does nothing
+- The server needs the SoundManagerPlugin plugin for these features; without it the mod does nothing, except that the window can still preview sounds for you
 
 ## Installation
 
@@ -31,6 +32,7 @@ Client mod that lets a server play music and sound effects with precise control:
 | `/sm off` | Stop all managed sounds and ignore the server until you turn the mod on again |
 | `/sm on` | Enable the mod again |
 | `/sm status` | Show whether the mod is enabled, how many sounds are playing and the volume cap |
+| `/sm gui` | Open the window for setting up and previewing a sound |
 
 ## Configuration
 
@@ -39,7 +41,7 @@ File: `config/soundmanager.json`
 | Key | Type | Default | Range | Description |
 |---|---|---|---|---|
 | `enabled` | boolean | `true` | `true`, `false` | Turn the mod on or off (changed by `/sm off` and `/sm on`) |
-| `maxVolume` | number | `10.0` | `0.0..10.0` | Maximum volume the server may use for managed sounds |
+| `maxVolume` | number | `10.0` | `0.0..10.0` | Maximum volume the server may use for managed sounds (also applied to your preview) |
 
 ```json
 {
@@ -50,11 +52,26 @@ File: `config/soundmanager.json`
 
 ## Controls
 
-None.
+| Control | Description |
+|---|---|
+| Key "Open SoundManager" | Opens the window. It has no default key: assign one in Options > Controls |
+
+## The SoundManager window
+
+Open it with `/sm gui` or the key above. It has four tabs:
+
+- **Sound**: search all sounds of the game and your resource packs and pick one. The length of the sound is shown.
+- **Parameters**: category, volume, pitch, start, end (or "play to the end"), fade in and fade out. Every value has a slider and a field for exact input.
+- **Target**: choose who hears the sound (players or a selector such as `@a`) and where: everywhere, at a position, or on an entity near you.
+- **Presets**: save the current settings under a name and load them later.
+
+Below the tabs a timeline shows the start, the end, the fades and the position of your preview. **Preview** plays the sound for you only, exactly as it is set, with Pause and Stop. **Send** runs the matching command on the server; it is available only if the server lets you use that command. **Copy** puts the command in your clipboard.
+
+Presets are stored in `config/soundmanager_presets.json` (up to 200, names up to 40 characters). The file is created when you save the first preset.
 
 ## Privacy and safety
 
-- The mod does not download anything and sends nothing to the server.
+- The mod does not download anything. It sends something to the server only when you press Send in the window: the chat command you see on screen.
 - It only plays sounds that already exist in the game or in your resource packs.
 - Sound categories follow your Minecraft volume sliders.
 - A server cannot override `enabled` or `maxVolume`. Use `/sm off` at any time to stop everything.
@@ -63,6 +80,9 @@ None.
 
 - **No sound.** Check `/sm status`; if the mod is disabled, use `/sm on`. Check the volume slider of the sound category and `maxVolume` in the config.
 - **A sound that starts in the middle does not play.** Seeking may be unavailable after a game update; the game log contains a message from the mod. Update the mod.
+- **The Send button is grey.** The server does not offer you the command shown in the status line. Ask the server administrator for permission.
+- **Preview does not play.** The mod may be turned off (`/sm on`), or the sound category or your volume cap is set to zero.
+- **The length shows "unknown".** The sound file is not in the Ogg Vorbis format or comes from a source the window cannot read; preview and sending still work.
 - **The mod does not react on a server.** The server must run SoundManagerPlugin of a matching version.
 
 ## License
@@ -82,12 +102,13 @@ All Rights Reserved.
 - Звуки везде, в точке мира или привязанные к сущности
 - Учитываются ползунки громкости и ваш собственный предел громкости
 - Аварийный выключатель, который сразу останавливает всё
+- Окно, где можно задать все параметры звука, прослушать его самому и затем отправить другим игрокам
 
 ### Требования
 
 - Minecraft 1.21.11
 - Fabric Loader и Fabric API
-- Для этих возможностей на сервере нужен плагин SoundManagerPlugin; без него мод ничего не делает
+- Для этих возможностей на сервере нужен плагин SoundManagerPlugin; без него мод ничего не делает, кроме того, что окно всё равно позволяет прослушивать звуки
 
 ### Установка
 
@@ -102,6 +123,7 @@ All Rights Reserved.
 | `/sm off` | Остановить все управляемые звуки и игнорировать сервер, пока мод не будет включён снова |
 | `/sm on` | Снова включить мод |
 | `/sm status` | Показать, включён ли мод, сколько звуков играет и предел громкости |
+| `/sm gui` | Открыть окно настройки и прослушивания звука |
 
 ### Настройка
 
@@ -110,11 +132,24 @@ All Rights Reserved.
 | Ключ | Тип | По умолчанию | Диапазон | Описание |
 |---|---|---|---|---|
 | `enabled` | boolean | `true` | `true`, `false` | Включить или выключить мод (меняется командами `/sm off` и `/sm on`) |
-| `maxVolume` | число | `10.0` | `0.0..10.0` | Максимальная громкость, которую сервер может использовать для управляемых звуков |
+| `maxVolume` | число | `10.0` | `0.0..10.0` | Максимальная громкость, которую сервер может использовать для управляемых звуков (действует и на ваше прослушивание) |
+
+### Окно SoundManager
+
+Открывается командой `/sm gui` или клавишей «Открыть SoundManager» (по умолчанию не назначена, назначьте её в «Настройки > Управление»). Четыре вкладки:
+
+- **Звук**: поиск по всем звукам игры и ресурспаков, выбор звука. Показывается длительность.
+- **Параметры**: категория, громкость, высота, начало, конец (или «до конца»), нарастание и затухание. У каждого значения есть ползунок и поле для точного ввода.
+- **Цель**: кому играть (игроки или селектор, например `@a`) и где: везде, в точке или на сущности рядом с вами.
+- **Пресеты**: сохранение текущих настроек под именем и загрузка позже.
+
+Под вкладками таймлайн показывает начало, конец, затухания и позицию вашего прослушивания. **Прослушать** проигрывает звук только вам, ровно с заданными настройками, есть пауза и стоп. **Отправить** выполняет на сервере соответствующую команду; кнопка доступна, только если сервер разрешает вам эту команду. **Копировать** кладёт команду в буфер обмена.
+
+Пресеты хранятся в `config/soundmanager_presets.json` (до 200, имя до 40 символов). Файл создаётся при сохранении первого пресета.
 
 ### Приватность и безопасность
 
-- Мод ничего не скачивает и ничего не отправляет на сервер.
+- Мод ничего не скачивает. Серверу он отправляет только одно: команду из чата, которую вы видите на экране, когда нажимаете «Отправить» в окне.
 - Он проигрывает только звуки, которые уже есть в игре или в ваших ресурспаках.
 - Категории звуков подчиняются ползункам громкости Minecraft.
 - Сервер не может изменить `enabled` и `maxVolume`. Команда `/sm off` в любой момент останавливает всё.
@@ -123,6 +158,9 @@ All Rights Reserved.
 
 - **Нет звука.** Проверьте `/sm status`; если мод выключен, выполните `/sm on`. Проверьте ползунок категории звука и `maxVolume` в конфиге.
 - **Звук, который начинается с середины, не играет.** После обновления игры перемотка может быть недоступна; в логе игры есть сообщение мода. Обновите мод.
+- **Кнопка «Отправить» серая.** Сервер не предлагает вам команду, показанную в строке состояния. Попросите администратора выдать право.
+- **Прослушивание не играет.** Возможно, мод выключен (`/sm on`), либо громкость категории или ваш предел громкости равны нулю.
+- **Длительность «неизвестна».** Файл звука не в формате Ogg Vorbis или окно не может его прочитать; прослушивание и отправка всё равно работают.
 - **Мод не реагирует на сервере.** На сервере должен работать SoundManagerPlugin подходящей версии.
 
 ### Лицензия

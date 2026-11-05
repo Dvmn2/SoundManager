@@ -10,10 +10,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 
 /**
  * Player-side settings stored in {@code config/soundmanager.json}.
@@ -58,14 +56,7 @@ public final class SoundManagerConfig {
         }
         Path target = path();
         try {
-            Files.createDirectories(target.getParent());
-            Path tmp = target.resolveSibling(FILE_NAME + ".tmp");
-            Files.writeString(tmp, GSON.toJson(instance), StandardCharsets.UTF_8);
-            try {
-                Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            } catch (AtomicMoveNotSupportedException ex) {
-                Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
-            }
+            AtomicFiles.writeString(target, GSON.toJson(instance));
         } catch (IOException ex) {
             LOGGER.warn("Could not save {}", target, ex);
         }

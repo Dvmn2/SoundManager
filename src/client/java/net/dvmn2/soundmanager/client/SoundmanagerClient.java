@@ -1,8 +1,11 @@
 package net.dvmn2.soundmanager.client;
 
 import net.dvmn2.soundmanager.client.command.SoundManagerCommand;
+import net.dvmn2.soundmanager.client.gui.GuiState;
+import net.dvmn2.soundmanager.client.gui.OpenGuiKey;
 import net.dvmn2.soundmanager.client.network.ControlPayload;
 import net.dvmn2.soundmanager.client.network.PlayPayload;
+import net.dvmn2.soundmanager.client.sound.PreviewController;
 import net.dvmn2.soundmanager.client.sound.SoundController;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
@@ -29,7 +32,14 @@ public final class SoundManagerClient implements ClientModInitializer {
                 context.client().execute(() -> SoundController.onControl(payload)));
 
         ClientTickEvents.END_CLIENT_TICK.register(SoundController::onTick);
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> SoundController.clear());
+        ClientTickEvents.END_CLIENT_TICK.register(PreviewController::onTick);
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            SoundController.clear();
+            PreviewController.stop();
+            GuiState.clear();
+        });
+
+        OpenGuiKey.register();
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
                 SoundManagerCommand.register(dispatcher));

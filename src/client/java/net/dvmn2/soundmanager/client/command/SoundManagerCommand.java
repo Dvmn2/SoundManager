@@ -4,9 +4,12 @@ import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
 import net.dvmn2.soundmanager.client.SoundManagerConfig;
+import net.dvmn2.soundmanager.client.gui.SoundManagerScreen;
+import net.dvmn2.soundmanager.client.sound.PreviewController;
 import net.dvmn2.soundmanager.client.sound.SoundController;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.Text;
 
 /**
@@ -15,6 +18,7 @@ import net.minecraft.text.Text;
  * /sm off      stop all managed sounds and ignore the server until "on"
  * /sm on       enable the mod again
  * /sm status   show the current state
+ * /sm gui      open the window for configuring and previewing sounds
  * </pre>
  */
 public final class SoundManagerCommand {
@@ -29,13 +33,15 @@ public final class SoundManagerCommand {
         dispatcher.register(ClientCommandManager.literal(ROOT)
                 .then(ClientCommandManager.literal("off").executes(SoundManagerCommand::off))
                 .then(ClientCommandManager.literal("on").executes(SoundManagerCommand::on))
-                .then(ClientCommandManager.literal("status").executes(SoundManagerCommand::status)));
+                .then(ClientCommandManager.literal("status").executes(SoundManagerCommand::status))
+                .then(ClientCommandManager.literal("gui").executes(SoundManagerCommand::gui)));
     }
 
     private static int off(CommandContext<FabricClientCommandSource> ctx) {
         SoundManagerConfig.get().enabled = false;
         SoundManagerConfig.save();
         SoundController.clear();
+        PreviewController.stop();
         ctx.getSource().sendFeedback(Text.translatable("soundmanager.off"));
         return Command.SINGLE_SUCCESS;
     }
@@ -54,6 +60,13 @@ public final class SoundManagerCommand {
                 state,
                 SoundController.activeCount(),
                 String.valueOf(config.maxVolume)));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int gui(CommandContext<FabricClientCommandSource> ctx) {
+        MinecraftClient client = ctx.getSource().getClient();
+        // Queued, because the chat screen closes right after the command and would close the new screen too.
+        client.send(() -> SoundManagerScreen.open(client));
         return Command.SINGLE_SUCCESS;
     }
 }
