@@ -2,6 +2,7 @@ package net.dvmn2.soundmanager.client.sound;
 
 import net.dvmn2.soundmanager.client.SoundManagerConfig;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.sound.SoundInstance;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -81,6 +82,16 @@ public final class PreviewController {
 
     public static boolean isPaused() {
         return paused != null;
+    }
+
+    /** True while a preview plays or is paused, i.e. until it is stopped or finishes. */
+    public static boolean isActive() {
+        return current != null || paused != null;
+    }
+
+    /** True if the sound instance is the playing preview. */
+    public static boolean isPreview(SoundInstance instance) {
+        return instance == current;
     }
 
     /** Position on the sound timeline in milliseconds, or -1 if there is no preview. */

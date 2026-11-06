@@ -34,6 +34,8 @@ public final class SoundManagerConfig {
     public boolean enabled = true;
     /** Client-side cap for the volume of managed sounds, 0.0..10.0. */
     public float maxVolume = MAX_VOLUME;
+    /** When true, every other sound of the game is made inaudible while the window previews a sound. */
+    public boolean previewMuteOthers = true;
 
     private SoundManagerConfig() {
     }

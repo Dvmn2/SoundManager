@@ -69,6 +69,13 @@ final class PagedButtonList<T> {
         refresh();
     }
 
+    /** Replaces the items but keeps the scroll position as far as it is still valid. */
+    void replaceItems(List<T> newItems) {
+        items = newItems;
+        offset = Math.max(0, Math.min(offset, items.size() - visibleRows));
+        refresh();
+    }
+
     /** Redraws the labels, e.g. after the selection changed. */
     void refresh() {
         for (int i = 0; i < buttons.size(); i++) {

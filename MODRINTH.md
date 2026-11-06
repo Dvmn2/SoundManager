@@ -12,6 +12,8 @@ Client mod that lets a server play music and sound effects with precise control:
 - Respects your volume sliders and your own volume cap
 - Emergency switch that stops everything at once
 - A window where you set every option of a sound, listen to it yourself and then send it to other players
+- Playlists: build a list of your presets on the server and play it for players one track after another
+- While you preview, all other sounds are silenced so that they do not disturb you
 
 ## Requirements
 
@@ -42,11 +44,13 @@ File: `config/soundmanager.json`
 |---|---|---|---|---|
 | `enabled` | boolean | `true` | `true`, `false` | Turn the mod on or off (changed by `/sm off` and `/sm on`) |
 | `maxVolume` | number | `10.0` | `0.0..10.0` | Maximum volume the server may use for managed sounds (also applied to your preview) |
+| `previewMuteOthers` | boolean | `true` | `true`, `false` | Silence every other sound of the game while a preview plays (button clicks stay audible) |
 
 ```json
 {
   "enabled": true,
-  "maxVolume": 1.0
+  "maxVolume": 1.0,
+  "previewMuteOthers": true
 }
 ```
 
@@ -58,12 +62,13 @@ File: `config/soundmanager.json`
 
 ## The SoundManager window
 
-Open it with `/sm gui` or the key above. It has four tabs:
+Open it with `/sm gui` or the key above. It has five tabs:
 
-- **Sound**: search all sounds of the game and your resource packs and pick one. The length of the sound is shown.
+- **Sound**: search all sounds of the game and your resource packs and pick one. The length of the sound is shown. The sort button cycles name A-Z, name Z-A, namespace A-Z and namespace Z-A; "Exclude Minecraft" hides the sounds of the game itself.
 - **Parameters**: category, volume, pitch, start, end (or "play to the end"), fade in and fade out. Every value has a slider and a field for exact input.
 - **Target**: choose who hears the sound (players or a selector such as `@a`) and where: everywhere, at a position, or on an entity near you.
 - **Presets**: save the current settings under a name and load them later.
+- **Playlists**: the playlists that live on the server. Create one, add presets to it (Add, then pick a preset), reorder or remove tracks, then choose the players in the field and press Start. Loop and Shuffle switch repeating and random order; Pause, Resume, Stop and Next control the running playlist. Playback is done by the server for the chosen players and is independent of your preview. A playing playlist cannot be edited. A track is a copy of the preset at the time you add it. Presets that play on an entity cannot be added, and a preset that plays to the end needs a sound whose length the window can read; otherwise set an end in the preset. You need the server's permission for playlist commands.
 
 Below the tabs a timeline shows the start, the end, the fades and the position of your preview. **Preview** plays the sound for you only, exactly as it is set, with Pause and Stop. **Send** runs the matching command on the server; it is available only if the server lets you use that command. **Copy** puts the command in your clipboard.
 
@@ -82,6 +87,7 @@ Presets are stored in `config/soundmanager_presets.json` (up to 200, names up to
 - **A sound that starts in the middle does not play.** Seeking may be unavailable after a game update; the game log contains a message from the mod. Update the mod.
 - **The Send button is grey.** The server does not offer you the command shown in the status line. Ask the server administrator for permission.
 - **Preview does not play.** The mod may be turned off (`/sm on`), or the sound category or your volume cap is set to zero.
+- **The Playlists tab is empty or grey.** The server must run SoundManagerPlugin 2.1.0 or newer and give you permission for `/soundmanager playlist`. Command results (for example "stop the playlist first") appear in the chat.
 - **The length shows "unknown".** The sound file is not in the Ogg Vorbis format or comes from a source the window cannot read; preview and sending still work.
 - **The mod does not react on a server.** The server must run SoundManagerPlugin of a matching version.
 
@@ -103,6 +109,8 @@ All Rights Reserved.
 - Учитываются ползунки громкости и ваш собственный предел громкости
 - Аварийный выключатель, который сразу останавливает всё
 - Окно, где можно задать все параметры звука, прослушать его самому и затем отправить другим игрокам
+- Плейлисты: список ваших пресетов на сервере, который играет игрокам трек за треком
+- Во время прослушивания все остальные звуки заглушаются, чтобы не мешать
 
 ### Требования
 
@@ -133,15 +141,17 @@ All Rights Reserved.
 |---|---|---|---|---|
 | `enabled` | boolean | `true` | `true`, `false` | Включить или выключить мод (меняется командами `/sm off` и `/sm on`) |
 | `maxVolume` | число | `10.0` | `0.0..10.0` | Максимальная громкость, которую сервер может использовать для управляемых звуков (действует и на ваше прослушивание) |
+| `previewMuteOthers` | boolean | `true` | `true`, `false` | Заглушать все остальные звуки игры, пока играет прослушивание (клики кнопок слышны) |
 
 ### Окно SoundManager
 
-Открывается командой `/sm gui` или клавишей «Открыть SoundManager» (по умолчанию не назначена, назначьте её в «Настройки > Управление»). Четыре вкладки:
+Открывается командой `/sm gui` или клавишей «Открыть SoundManager» (по умолчанию не назначена, назначьте её в «Настройки > Управление»). Пять вкладок:
 
-- **Звук**: поиск по всем звукам игры и ресурспаков, выбор звука. Показывается длительность.
+- **Звук**: поиск по всем звукам игры и ресурспаков, выбор звука. Показывается длительность. Кнопка сортировки переключает: имя А-Я, имя Я-А, namespace А-Я, namespace Я-А; «Исключить Minecraft» скрывает звуки самой игры.
 - **Параметры**: категория, громкость, высота, начало, конец (или «до конца»), нарастание и затухание. У каждого значения есть ползунок и поле для точного ввода.
 - **Цель**: кому играть (игроки или селектор, например `@a`) и где: везде, в точке или на сущности рядом с вами.
 - **Пресеты**: сохранение текущих настроек под именем и загрузка позже.
+- **Плейлисты**: плейлисты, которые хранятся на сервере. Создайте плейлист, добавьте в него пресеты («Добавить», затем выберите пресет), переставляйте и убирайте треки, затем укажите игроков в поле и нажмите «Запустить». «Повтор» и «Перемешать» включают цикл и случайный порядок; «Пауза», «Продолжить», «Стоп» и «Далее» управляют играющим плейлистом. Воспроизведение выполняет сервер для выбранных игроков, оно не зависит от вашего прослушивания. Играющий плейлист изменить нельзя. Трек — это копия пресета на момент добавления. Пресеты с воспроизведением на сущности добавить нельзя, а пресету «до конца» нужен звук, длину которого окно может прочитать; иначе задайте конец в пресете. Нужно право сервера на команды плейлистов.
 
 Под вкладками таймлайн показывает начало, конец, затухания и позицию вашего прослушивания. **Прослушать** проигрывает звук только вам, ровно с заданными настройками, есть пауза и стоп. **Отправить** выполняет на сервере соответствующую команду; кнопка доступна, только если сервер разрешает вам эту команду. **Копировать** кладёт команду в буфер обмена.
 
@@ -160,6 +170,7 @@ All Rights Reserved.
 - **Звук, который начинается с середины, не играет.** После обновления игры перемотка может быть недоступна; в логе игры есть сообщение мода. Обновите мод.
 - **Кнопка «Отправить» серая.** Сервер не предлагает вам команду, показанную в строке состояния. Попросите администратора выдать право.
 - **Прослушивание не играет.** Возможно, мод выключен (`/sm on`), либо громкость категории или ваш предел громкости равны нулю.
+- **Вкладка «Плейлисты» пустая или серая.** На сервере должен работать SoundManagerPlugin 2.1.0 или новее, и у вас должно быть право на `/soundmanager playlist`. Результаты команд (например, «сначала остановите плейлист») появляются в чате.
 - **Длительность «неизвестна».** Файл звука не в формате Ogg Vorbis или окно не может его прочитать; прослушивание и отправка всё равно работают.
 - **Мод не реагирует на сервере.** На сервере должен работать SoundManagerPlugin подходящей версии.
 

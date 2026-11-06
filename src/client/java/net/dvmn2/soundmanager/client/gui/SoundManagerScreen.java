@@ -11,6 +11,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.gui.widget.ClickableWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.client.network.ClientCommandSource;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
@@ -37,17 +38,17 @@ import java.util.function.DoubleConsumer;
  */
 public final class SoundManagerScreen extends Screen {
 
-    private static final String SERVER_COMMAND_ROOT = "soundmanager";
+    static final String SERVER_COMMAND_ROOT = "soundmanager";
 
     private static final int MARGIN = 10;
-    private static final int GAP = 4;
+    static final int GAP = 4;
     private static final int TITLE_Y = 8;
     private static final int TABS_Y = 20;
     private static final int CONTENT_TOP = 46;
     private static final int BOTTOM_HEIGHT = 80;
-    private static final int WIDGET_HEIGHT = 20;
-    private static final int ROW_STEP = 22;
-    private static final int LIST_ROW_HEIGHT = 16;
+    static final int WIDGET_HEIGHT = 20;
+    static final int ROW_STEP = 22;
+    static final int LIST_ROW_HEIGHT = 16;
     private static final int INFO_HEIGHT = 12;
     private static final int RANGE_TEXT_WIDTH = 70;
     private static final int QUICK_BUTTON_WIDTH = 28;
@@ -68,10 +69,10 @@ public final class SoundManagerScreen extends Screen {
     private static final int STATUS_TICKS = 80;
 
     private static final int COLOR_TEXT = 0xFFFFFFFF;
-    private static final int COLOR_GRAY = 0xFFAAAAAA;
-    private static final int COLOR_WARNING = 0xFFFFAA00;
-    private static final int COLOR_ERROR = 0xFFFF5555;
-    private static final int COLOR_OK = 0xFF55FF55;
+    static final int COLOR_GRAY = 0xFFAAAAAA;
+    static final int COLOR_WARNING = 0xFFFFAA00;
+    static final int COLOR_ERROR = 0xFFFF5555;
+    static final int COLOR_OK = 0xFF55FF55;
 
     private final PlayForm form = GuiState.FORM;
     private final Timeline timeline = new Timeline();
@@ -120,11 +121,47 @@ public final class SoundManagerScreen extends Screen {
     @Nullable
     private ValueRow fadeOutRow;
     @Nullable
+    private PlaylistTab playlistTab;
+    @Nullable
     private ButtonWidget pauseButton;
     @Nullable
     private ButtonWidget stopButton;
     @Nullable
     private ButtonWidget sendButton;
+
+    /** The services the Playlists tab takes from this screen. */
+    private final PlaylistTab.Host playlistHost = new PlaylistTab.Host() {
+        @Override
+        public <T extends ClickableWidget> T add(T widget) {
+            return addDrawableChild(widget);
+        }
+
+        @Override
+        public void register(PagedButtonList<?> list) {
+            lists.add(list);
+        }
+
+        @Override
+        public void status(String key, int color, Object... args) {
+            setStatus(key, color, args);
+        }
+
+        @Override
+        @Nullable
+        public SoundCatalog catalog() {
+            return catalog;
+        }
+
+        @Override
+        public void formChanged() {
+            onFormChanged();
+        }
+
+        @Override
+        public void rebuild() {
+            clearAndInit();
+        }
+    };
 
     private SoundManagerScreen(MinecraftClient client) {
         super(Text.translatable("soundmanager.gui.title"));
@@ -137,7 +174,7 @@ public final class SoundManagerScreen extends Screen {
     }
 
     private enum Tab {
-        SOUND("sound"), PARAMS("params"), TARGET("target"), PRESETS("presets");
+        SOUND("sound"), PARAMS("params"), TARGET("target"), PRESETS("presets"), PLAYLISTS("playlists");
 
         private final String key;
 
@@ -156,6 +193,7 @@ public final class SoundManagerScreen extends Screen {
         soundList = null;
         presetList = null;
         entityList = null;
+        playlistTab = null;
         startRow = null;
         endRow = null;
         fadeInRow = null;
@@ -167,6 +205,7 @@ public final class SoundManagerScreen extends Screen {
             case PARAMS -> addParamsTab();
             case TARGET -> addTargetTab();
             case PRESETS -> addPresetsTab();
+            case PLAYLISTS -> addPlaylistsTab();
         }
         addBottomButtons();
         refreshSoundInfo();
@@ -178,6 +217,10 @@ public final class SoundManagerScreen extends Screen {
     public void tick() {
         super.tick();
         pollFutures();
+        PlaylistTab playlists = playlistTab;
+        if (playlists != null) {
+            playlists.tick();
+        }
         updatePreviewState();
         boolean allowed = canSend();
         if (allowed != sendAllowed) {
@@ -233,7 +276,7 @@ public final class SoundManagerScreen extends Screen {
                     if (list.isEmpty()) {
                         Text empty = Text.translatable(catalog == null
                                 ? "soundmanager.gui.sound.loading" : "soundmanager.gui.sound.none_found");
-                        context.drawTextWithShadow(textRenderer, empty, MARGIN, CONTENT_TOP + ROW_STEP + 4,
+                        context.drawTextWithShadow(textRenderer, empty, MARGIN, CONTENT_TOP + 2 * ROW_STEP + 4,
                                 COLOR_GRAY);
                     }
                 }
@@ -256,6 +299,11 @@ public final class SoundManagerScreen extends Screen {
                 if (presetList != null && presetList.isEmpty()) {
                     context.drawTextWithShadow(textRenderer, Text.translatable("soundmanager.gui.preset.empty"),
                             rightColumnX(), CONTENT_TOP + 6, COLOR_GRAY);
+                }
+            }
+            case PLAYLISTS -> {
+                if (playlistTab != null) {
+                    playlistTab.render(context);
                 }
             }
             case PARAMS -> {
@@ -319,7 +367,22 @@ public final class SoundManagerScreen extends Screen {
         });
         addDrawableChild(search);
 
-        int listTop = CONTENT_TOP + ROW_STEP;
+        int half = (fullWidth - GAP) / 2;
+        int buttonsY = CONTENT_TOP + ROW_STEP;
+        ButtonWidget sortButton = ButtonWidget.builder(sortText(), pressed -> {
+            GuiState.soundSort = GuiState.soundSort.next();
+            pressed.setMessage(sortText());
+            applySoundFilter();
+        }).dimensions(MARGIN, buttonsY, half, WIDGET_HEIGHT).build();
+        addDrawableChild(sortButton);
+        ButtonWidget excludeButton = ButtonWidget.builder(excludeText(), pressed -> {
+            GuiState.excludeMinecraft = !GuiState.excludeMinecraft;
+            pressed.setMessage(excludeText());
+            applySoundFilter();
+        }).dimensions(MARGIN + half + GAP, buttonsY, half, WIDGET_HEIGHT).build();
+        addDrawableChild(excludeButton);
+
+        int listTop = CONTENT_TOP + 2 * ROW_STEP;
         int rows = listRows(listTop + INFO_HEIGHT);
         PagedButtonList<Identifier> list = new PagedButtonList<>(textRenderer, MARGIN, listTop, fullWidth,
                 LIST_ROW_HEIGHT, rows, this::soundLabel, this::pickSound);
@@ -329,8 +392,19 @@ public final class SoundManagerScreen extends Screen {
         applySoundFilter();
     }
 
+    private Text sortText() {
+        return Text.translatable("soundmanager.gui.sort",
+                Text.translatable("soundmanager.gui.sort." + GuiState.soundSort.name().toLowerCase(Locale.ROOT)));
+    }
+
+    private Text excludeText() {
+        return Text.translatable("soundmanager.gui.exclude_minecraft",
+                Text.translatable(GuiState.excludeMinecraft ? "options.on" : "options.off"));
+    }
+
     private Text soundLabel(Identifier id) {
-        String name = "minecraft".equals(id.getNamespace()) ? id.getPath() : id.toString();
+        boolean shortName = !GuiState.soundSort.isByNamespace() && "minecraft".equals(id.getNamespace());
+        String name = shortName ? id.getPath() : id.toString();
         return Text.literal((id.equals(form.sound) ? "> " : "") + name);
     }
 
@@ -346,7 +420,8 @@ public final class SoundManagerScreen extends Screen {
     private void applySoundFilter() {
         SoundCatalog current = catalog;
         if (soundList != null) {
-            soundList.setItems(current == null ? List.of() : current.search(soundFilter));
+            soundList.setItems(current == null ? List.of()
+                    : current.search(soundFilter, GuiState.soundSort, GuiState.excludeMinecraft));
         }
     }
 
@@ -726,6 +801,15 @@ public final class SoundManagerScreen extends Screen {
             }
             setStatus("soundmanager.gui.preset.deleted", COLOR_OK);
         }
+    }
+
+    // ---------- Tab: playlists ----------
+
+    private void addPlaylistsTab() {
+        PlaylistTab created = new PlaylistTab(playlistHost, textRenderer, MARGIN, rightColumnX(), columnWidth(),
+                CONTENT_TOP, height - BOTTOM_HEIGHT);
+        playlistTab = created;
+        created.build();
     }
 
     // ---------- Bottom bar ----------

@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.Reader;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -34,17 +35,23 @@ public final class SoundCatalog {
     private static final int MAX_REFS_PER_EVENT = 1_024;
     private static final int MAX_RESOLVE_DEPTH = 4;
     private static final String TYPE_EVENT = "event";
+    private static final String MINECRAFT_NAMESPACE = "minecraft";
 
     private static final SoundCatalog EMPTY = new SoundCatalog(Map.of());
 
     private final Map<Identifier, List<Ref>> events;
-    private final List<Identifier> ids;
+    /** Ids ordered by path, then namespace. */
+    private final List<Identifier> byPath;
+    /** Ids ordered by namespace, then path. */
+    private final List<Identifier> byNamespace;
 
     private SoundCatalog(Map<Identifier, List<Ref>> events) {
         this.events = events;
         List<Identifier> sorted = new ArrayList<>(events.keySet());
-        sorted.sort(null);
-        this.ids = List.copyOf(sorted);
+        sorted.sort(Comparator.comparing(Identifier::getPath).thenComparing(Identifier::getNamespace));
+        this.byPath = List.copyOf(sorted);
+        sorted.sort(Comparator.comparing(Identifier::getNamespace).thenComparing(Identifier::getPath));
+        this.byNamespace = List.copyOf(sorted);
     }
 
     /** A catalog without sounds, used while loading and after a failure. */
@@ -68,20 +75,22 @@ public final class SoundCatalog {
         return new SoundCatalog(Map.copyOf(frozen));
     }
 
-    /** All sound event ids, sorted. */
-    public List<Identifier> ids() {
-        return ids;
-    }
-
-    /** Ids that contain the query text (case-insensitive); an empty query returns all ids. */
-    public List<Identifier> search(String query) {
+    /**
+     * Ids that contain the query text (case-insensitive) in the given order; an empty query matches all ids.
+     *
+     * @param excludeMinecraft true to leave out the sounds of the {@code minecraft} namespace
+     */
+    public List<Identifier> search(String query, SoundSort sort, boolean excludeMinecraft) {
         String needle = query.strip().toLowerCase(Locale.ROOT);
-        if (needle.isEmpty()) {
-            return ids;
+        List<Identifier> base = sort.isByNamespace() ? byNamespace : byPath;
+        if (needle.isEmpty() && !excludeMinecraft && !sort.isDescending()) {
+            return base;
         }
         List<Identifier> found = new ArrayList<>();
-        for (Identifier id : ids) {
-            if (id.toString().contains(needle)) {
+        for (int i = 0; i < base.size(); i++) {
+            Identifier id = base.get(sort.isDescending() ? base.size() - 1 - i : i);
+            boolean hidden = excludeMinecraft && MINECRAFT_NAMESPACE.equals(id.getNamespace());
+            if (!hidden && (needle.isEmpty() || id.toString().contains(needle))) {
                 found.add(id);
             }
         }

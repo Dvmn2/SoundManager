@@ -42,7 +42,8 @@ final class PlayCommand {
         return text.toString();
     }
 
-    private static void appendOptions(StringBuilder text, PlayForm form) {
+    /** Appends the positional options up to the last one that differs from its default. */
+    static void appendOptions(StringBuilder text, PlayForm form) {
         List<String> options = new ArrayList<>();
         options.add(Numbers.format(form.startSec));
         options.add(form.toEnd ? TO_END : Numbers.format(form.endSec));
