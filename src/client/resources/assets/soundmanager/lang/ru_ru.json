@@ -33,6 +33,8 @@
   "soundmanager.gui.mode.playon": "playon (сущность)",
   "soundmanager.gui.mode.play_hint": "Звук слышен везде.",
   "soundmanager.gui.targets": "Игроки или селектор",
+  "soundmanager.gui.distance": "Дистанция, блоки",
+  "soundmanager.gui.distance.hint": "Дистанция считается от вас.",
   "soundmanager.gui.position.here": "Моя позиция",
   "soundmanager.gui.entity.refresh": "Обновить ближайшие сущности",
   "soundmanager.gui.entity.none": "Рядом нет сущностей.",

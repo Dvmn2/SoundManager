@@ -41,7 +41,9 @@ public final class PreviewController {
         stop();
         ManagedSound sound = new ManagedSound(params);
         current = sound;
-        MinecraftClient.getInstance().getSoundManager().play(sound);
+        MinecraftClient client = MinecraftClient.getInstance();
+        client.getSoundManager().play(sound);
+        PreviewMute.onTick(client);
         return StartResult.STARTED;
     }
 

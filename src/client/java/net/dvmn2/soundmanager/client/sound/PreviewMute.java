@@ -22,8 +22,13 @@ import java.util.Set;
  * Makes every other sound of the game inaudible while the window previews a sound, and restores them afterwards.
  * <p>
  * The sounds are not stopped or paused: their volume is lowered to an inaudible level, so they keep their position
- * and (for sounds of the server) their timing. Sounds of the interface (button clicks) are left alone. Runs from
- * the client tick, so a sound that starts between two ticks may be heard for up to one tick. Client thread only.
+ * and (for sounds of the server) their timing. Sounds of the interface (button clicks) are left alone. Client
+ * thread only.
+ * <p>
+ * Two mechanisms work together. A {@link ManagedSound} asks {@link #shouldSilence} while it computes its own
+ * volume, so the game itself applies the quiet volume every tick and nothing is heard between ticks. Any other
+ * sound gets its source volume lowered from the client tick; a sound that the game re-tunes every tick (a vanilla
+ * tickable sound) may therefore still be heard for a moment, and so may a sound that starts between two ticks.
  * <p>
  * Reaching the sound sources uses the same accessors as seeking; if anything goes wrong, the feature switches
  * itself off for the rest of the session and logs once.
@@ -45,13 +50,23 @@ public final class PreviewMute {
     private PreviewMute() {
     }
 
-    /** END_CLIENT_TICK: mutes while a preview is active, restores when it is over. */
+    /**
+     * True if the sound must be inaudible now because a preview is active. For sounds that set their own volume
+     * (see {@link ManagedSound}); the preview itself and interface sounds are never silenced.
+     */
+    public static boolean shouldSilence(SoundInstance instance) {
+        return !failed && isWanted() && !PreviewController.isPreview(instance) && !isInterfaceSound(instance);
+    }
+
+    /**
+     * END_CLIENT_TICK: mutes while a preview is active, restores when it is over. Also called right after a preview
+     * starts, so the other sounds do not stay audible until the next tick.
+     */
     public static void onTick(MinecraftClient client) {
         if (failed) {
             return;
         }
-        SoundManagerConfig config = SoundManagerConfig.get();
-        boolean wanted = config.enabled && config.previewMuteOthers && PreviewController.isActive();
+        boolean wanted = isWanted();
         if (!wanted && MUTED.isEmpty()) {
             return;
         }
@@ -76,10 +91,12 @@ public final class PreviewMute {
             if (PreviewController.isPreview(instance) || isInterfaceSound(instance)) {
                 continue;
             }
-            // A sound that updates itself every tick gets its volume back from the game, so it is muted again
-            // each tick; any other sound keeps the volume that is set once.
+            // A managed sound lowers its own volume (shouldSilence), so it needs only the first, immediate mute. Another
+            // sound that updates itself every tick gets its volume back from the game and is muted again each
+            // tick; any other sound keeps the volume that is set once.
             boolean firstTime = MUTED.add(instance);
-            if (firstTime || instance instanceof TickableSoundInstance) {
+            boolean retuned = instance instanceof TickableSoundInstance && !(instance instanceof ManagedSound);
+            if (firstTime || retuned) {
                 entry.getValue().run(source -> source.setVolume(MUTED_VOLUME));
             }
         }
@@ -102,6 +119,11 @@ public final class PreviewMute {
         SoundCategory category = instance.getCategory();
         float slider = category == SoundCategory.MASTER ? 1.0f : client.options.getSoundVolume(category);
         return Math.max(0.0f, Math.min(1.0f, instance.getVolume() * slider));
+    }
+
+    private static boolean isWanted() {
+        SoundManagerConfig config = SoundManagerConfig.get();
+        return config.enabled && config.previewMuteOthers && PreviewController.isActive();
     }
 
     private static boolean isInterfaceSound(SoundInstance instance) {

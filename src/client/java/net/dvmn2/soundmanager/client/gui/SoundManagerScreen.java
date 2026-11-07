@@ -64,6 +64,8 @@ public final class SoundManagerScreen extends Screen {
     private static final double DEFAULT_FADE_SLIDER_SECONDS = 30.0;
     private static final double MAX_FADE_SLIDER_SECONDS = 60.0;
     private static final double MS_PER_SECOND = 1000.0;
+    private static final double DISTANCE_SLIDER_BLOCKS = 100.0;
+    private static final double DISTANCE_STEPS_PER_BLOCK = 1.0;
     private static final double ENTITY_RADIUS = 64.0;
     private static final int MAX_ENTITIES = 64;
     private static final int STATUS_TICKS = 80;
@@ -120,6 +122,8 @@ public final class SoundManagerScreen extends Screen {
     private ValueRow fadeInRow;
     @Nullable
     private ValueRow fadeOutRow;
+    @Nullable
+    private ValueRow distanceRow;
     @Nullable
     private PlaylistTab playlistTab;
     @Nullable
@@ -198,6 +202,7 @@ public final class SoundManagerScreen extends Screen {
         endRow = null;
         fadeInRow = null;
         fadeOutRow = null;
+        distanceRow = null;
 
         addTabButtons();
         switch (tab) {
@@ -290,6 +295,10 @@ public final class SoundManagerScreen extends Screen {
                 if (form.mode == PlayForm.Mode.PLAY) {
                     context.drawTextWithShadow(textRenderer, Text.translatable("soundmanager.gui.mode.play_hint"),
                             x, CONTENT_TOP + 6, COLOR_GRAY);
+                } else if (form.mode == PlayForm.Mode.PLAY_AT && form.distanceBlocks > 0
+                        && TargetSelector.supportsDistance(form.targets)) {
+                    context.drawTextWithShadow(textRenderer, Text.translatable("soundmanager.gui.distance.hint"),
+                            x, CONTENT_TOP + 2 * ROW_STEP + 6, COLOR_GRAY);
                 } else if (form.mode == PlayForm.Mode.PLAY_ON && entityList != null && entityList.isEmpty()) {
                     context.drawTextWithShadow(textRenderer, Text.translatable("soundmanager.gui.entity.none"),
                             x, CONTENT_TOP + ROW_STEP + 4, COLOR_GRAY);
@@ -588,13 +597,25 @@ public final class SoundManagerScreen extends Screen {
         targets.setText(form.targets);
         targets.setChangedListener(value -> {
             form.targets = value;
+            refreshDistanceRow();
             onFormChanged();
         });
         addDrawableChild(targets);
         addQuickTarget(targets, "@s", leftX + fieldWidth + 2, y + ROW_STEP);
         addQuickTarget(targets, "@a", leftX + fieldWidth + 2 + QUICK_BUTTON_WIDTH + 2, y + ROW_STEP);
 
-        int playersTop = y + 2 * ROW_STEP;
+        ValueRow distance = new ValueRow(textRenderer, leftX, y + 2 * ROW_STEP, columnWidth,
+                Text.translatable("soundmanager.gui.distance"),
+                0.0, DISTANCE_SLIDER_BLOCKS, PlayForm.MAX_DISTANCE_BLOCKS, form.distanceBlocks,
+                DISTANCE_STEPS_PER_BLOCK, value -> {
+                    form.distanceBlocks = value;
+                    onFormChanged();
+                });
+        distance.addTo(this::addDrawableChild);
+        distanceRow = distance;
+        refreshDistanceRow();
+
+        int playersTop = y + 3 * ROW_STEP;
         PagedButtonList<String> players = new PagedButtonList<>(textRenderer, leftX, playersTop, columnWidth,
                 LIST_ROW_HEIGHT, listRows(playersTop), Text::literal, targets::setText);
         players.addTo(this::addDrawableChild);
@@ -607,6 +628,14 @@ public final class SoundManagerScreen extends Screen {
             case PLAY -> {
                 // The global variant has no extra controls; a hint is drawn instead.
             }
+        }
+    }
+
+    /** The distance applies only to selectors that can take it; for players and {@code @s} the row is disabled. */
+    private void refreshDistanceRow() {
+        ValueRow row = distanceRow;
+        if (row != null) {
+            row.setActive(TargetSelector.supportsDistance(form.targets));
         }
     }
 

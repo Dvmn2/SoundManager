@@ -27,7 +27,7 @@ final class PlayCommand {
     static String format(PlayForm form) {
         StringBuilder text = new StringBuilder(ROOT)
                 .append(' ').append(form.mode.literal())
-                .append(' ').append(form.targets.strip())
+                .append(' ').append(TargetSelector.withDistance(form.targets, form.distanceBlocks))
                 .append(' ').append(form.sound == null ? "<sound>" : form.sound.toString());
         switch (form.mode) {
             case PLAY_AT -> text.append(' ').append(Numbers.format(form.x))

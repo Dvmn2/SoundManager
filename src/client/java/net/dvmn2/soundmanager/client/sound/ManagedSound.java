@@ -151,6 +151,9 @@ public final class ManagedSound extends MovingSoundInstance {
         if (!ready) {
             return MIN_VOLUME;
         }
+        if (PreviewMute.shouldSilence(this)) {
+            return MIN_VOLUME; // the game applies this every tick, so no louder moment slips through
+        }
         float v = volumeRamp.get(now);
         if (params.fadeInMs() > 0 && fadeInStarted) {
             v *= (float) clamp01((now - fadeInStartNs) / (params.fadeInMs() * NANOS_PER_MS));

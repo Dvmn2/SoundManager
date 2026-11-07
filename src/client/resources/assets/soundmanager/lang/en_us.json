@@ -33,6 +33,8 @@
   "soundmanager.gui.mode.playon": "playon (entity)",
   "soundmanager.gui.mode.play_hint": "The sound plays everywhere.",
   "soundmanager.gui.targets": "Players or selector",
+  "soundmanager.gui.distance": "Distance, blocks",
+  "soundmanager.gui.distance.hint": "Distance is measured from you.",
   "soundmanager.gui.position.here": "My position",
   "soundmanager.gui.entity.refresh": "Refresh nearby entities",
   "soundmanager.gui.entity.none": "No entities nearby.",

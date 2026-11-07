@@ -45,9 +45,10 @@ src/client/java/net/dvmn2/soundmanager/client
 | `SoundManagerScreen` | the GUI: tabs Sound, Parameters, Target, Presets, Playlists; timeline, preview and send buttons |
 | `PlaylistTab`, `PlaylistCommand` | the Playlists tab (lists from `PlaylistState`, buttons send `/soundmanager playlist ...`) and the command text builder |
 | `PlaylistState` | the playlists of the server as last reported; immutable snapshot replaced as a whole, cleared on disconnect |
-| `PreviewMute` | lowers the volume of every other sound while a preview is active and restores it afterwards |
+| `PreviewMute` | lowers the volume of every other sound while a preview is active and restores it afterwards; `ManagedSound` asks it for its own volume |
 | `SoundSort` | order of the sound list: name or namespace, ascending or descending |
 | `PlayForm`, `PlayCommand` | editable values of every `play`/`playat`/`playon` argument; builds the command text |
+| `TargetSelector` | adds `distance=..x` to an entity selector when the command is built; the targets field is not changed |
 | `ValueRow`, `PagedButtonList`, `Timeline` | slider plus field, a scrollable list made of buttons, the timeline drawing |
 | `GuiState` | the form values kept while the game runs; the entity is dropped on disconnect |
 | `OpenGuiKey` | key binding without a default key that opens the GUI |
@@ -82,7 +83,7 @@ The first field of every packet is the protocol version. A packet with a differe
 | File | Content |
 |---|---|
 | `config/soundmanager.json` | `enabled` (boolean, default `true`), `maxVolume` (number `0.0..10.0`, default `10.0`), `previewMuteOthers` (boolean, default `true`) |
-| `config/soundmanager_presets.json` | `version` (`1`) and `presets`: up to 200 entries, see `PresetDto` (`name` up to 40 characters, `mode`, `targets`, `sound`, `category`, `volume`, `pitch`, `startSec`, `endSec` (`-1` = to the end), `fadeInSec`, `fadeOutSec`, `x`, `y`, `z`) |
+| `config/soundmanager_presets.json` | `version` (`1`) and `presets`: up to 200 entries, see `PresetDto` (`name` up to 40 characters, `mode`, `targets`, `distanceBlocks` (`0` = no limit, `0..1000`), `sound`, `category`, `volume`, `pitch`, `startSec`, `endSec` (`-1` = to the end), `fadeInSec`, `fadeOutSec`, `x`, `y`, `z`) |
 
 The config is created on first start. Unreadable or invalid files fall back to defaults with a log warning; `maxVolume` is clamped after loading. The presets file is created on the first save; a damaged file is treated as empty, invalid or duplicate entries are skipped, and values are clamped when a preset is loaded. No cache and no downloads: sound lengths are kept in memory only.
 
@@ -100,7 +101,8 @@ The config is created on first start. Unreadable or invalid files fall back to d
 - Lists in the GUI are made of ordinary buttons (`PagedButtonList`) to avoid version-specific list widgets; the timeline is display only.
 - Playlists live on the server. The Playlists tab shows what `PlaylistState` holds and changes it only by sending commands; the server answers with new `sm_plist` packets. A track is a copy of a preset's options. For a preset that plays to the end the tab reads the length of the sound file and passes it as the `length` argument; a sound event with several files, or an unknown length, needs an explicit end in the preset. `playon` presets cannot be added. The tab is enabled when the command tree contains `soundmanager playlist`.
 - `PlaylistPayload` decodes a packet with another protocol version, an unknown action or too many tracks as an inert packet and skips the rest of the bytes, so a mismatch never disconnects the player.
-- Muting during preview: every client tick, while a preview plays or is paused, `PreviewMute` sets a tiny non-zero volume (zero would stop the source) on the source of every other sound except interface sounds (category `ui` or `minecraft:ui.*`). Sounds that tick themselves are muted again each tick; others once. When the preview ends the volume of the others is set back from the sound's own volume and the category slider (tickable sounds set their own). A sound that starts between two ticks may be heard for up to one tick. No mixin is needed beyond the existing accessors; on any error the feature disables itself for the session and logs once.
+- Muting during preview: while a preview plays or is paused, every other sound except interface sounds (category `ui` or `minecraft:ui.*`) gets a tiny non-zero volume (zero would stop the source). A `ManagedSound` returns that volume from its own `computeVolume` (`PreviewMute.shouldSilence`), because the game re-applies the volume of a tickable sound at the start of every tick and a mute set later from `END_CLIENT_TICK` was audible in between. `PreviewMute` mutes the source of such a sound once, immediately (also when the preview starts), and of every other sound from the client tick: a tickable vanilla sound is muted again each tick and may still be heard briefly, the others once. When the preview ends the volume of the others is set back from the sound's own volume and the category slider (tickable sounds set their own). A sound that starts between two ticks may be heard for up to one tick. No mixin is needed beyond the existing accessors; on any error the feature disables itself for the session and logs once.
+- The selector distance is a separate value (`PlayForm.distanceBlocks`), not part of the targets text, and is added by `TargetSelector` only to `@a`, `@e`, `@p`, `@r` and `@n` selectors that have no `distance` of their own. It is measured by the server from the sender, also for `playat`. It applies to `play`, `playat` and `playon` commands only; the Playlists tab sends its own targets text unchanged.
 - The sort and the "Exclude Minecraft" switch of the Sound tab are kept in `GuiState` (until the game closes) and are not written to the config.
 - Accessor members use the `soundmanager$` prefix; the mixin config lists every class of the mixin package.
 

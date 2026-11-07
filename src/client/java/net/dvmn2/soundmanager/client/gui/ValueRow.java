@@ -23,13 +23,16 @@ final class ValueRow {
     private static final int FIELD_WIDTH = 46;
     private static final int FIELD_GAP = 2;
     private static final int MAX_FIELD_LENGTH = 12;
-    private static final double SLIDER_STEP = 100.0;
+    /** Slider resolution of the default constructor: hundredths of a unit. */
+    private static final double DEFAULT_STEPS_PER_UNIT = 100.0;
     private static final Pattern NUMBER_TEXT = Pattern.compile("-?[0-9]*[.,]?[0-9]*");
 
     private final Text label;
     private final double min;
     private final double hardMax;
     private final DoubleConsumer onChange;
+    /** Slider positions per unit of the value: 1 = whole numbers only. The text field is not affected. */
+    private final double stepsPerUnit;
     private final RowSlider slider;
     private final TextFieldWidget field;
 
@@ -39,7 +42,14 @@ final class ValueRow {
 
     ValueRow(TextRenderer textRenderer, int x, int y, int width, Text label,
              double min, double sliderMax, double hardMax, double initial, DoubleConsumer onChange) {
+        this(textRenderer, x, y, width, label, min, sliderMax, hardMax, initial, DEFAULT_STEPS_PER_UNIT, onChange);
+    }
+
+    ValueRow(TextRenderer textRenderer, int x, int y, int width, Text label,
+             double min, double sliderMax, double hardMax, double initial, double stepsPerUnit,
+             DoubleConsumer onChange) {
         this.label = label;
+        this.stepsPerUnit = stepsPerUnit;
         this.min = min;
         this.sliderMax = sliderMax;
         this.hardMax = hardMax;
@@ -69,7 +79,7 @@ final class ValueRow {
 
     /** Changes the range of the slider, e.g. once the length of the sound is known. */
     void setSliderMax(double newMax) {
-        sliderMax = Math.max(newMax, min + 1.0 / SLIDER_STEP);
+        sliderMax = Math.max(newMax, min + 1.0 / stepsPerUnit);
         slider.show(normalized(current));
     }
 
@@ -81,7 +91,7 @@ final class ValueRow {
 
     private void onSlider(double normalizedValue) {
         double raw = min + normalizedValue * (sliderMax - min);
-        current = Numbers.clamp(Math.round(raw * SLIDER_STEP) / SLIDER_STEP, min, hardMax);
+        current = Numbers.clamp(Math.round(raw * stepsPerUnit) / stepsPerUnit, min, hardMax);
         syncing = true;
         field.setText(Numbers.format(current));
         syncing = false;

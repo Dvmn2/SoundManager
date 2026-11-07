@@ -10,6 +10,8 @@ public final class PresetDto {
     /** Command literal: {@code play}, {@code playat} or {@code playon}. */
     public String mode = "play";
     public String targets = "@s";
+    /** Selector distance in blocks; 0 = no limit. */
+    public double distanceBlocks = 0.0;
     /** Sound event id, {@code namespace:path}. */
     public String sound = "";
     /** Category id as in the {@code category} command argument. */

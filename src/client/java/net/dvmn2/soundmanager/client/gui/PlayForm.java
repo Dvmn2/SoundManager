@@ -23,6 +23,8 @@ final class PlayForm {
     static final double MAX_TIME_SEC = 24.0 * 60 * 60;
     /** Upper bound of fades: 10 minutes, seconds. */
     static final double MAX_FADE_SEC = 10.0 * 60;
+    /** Upper bound of the selector distance, blocks. */
+    static final double MAX_DISTANCE_BLOCKS = 1000.0;
     /** Largest coordinate that fits in the world, blocks. */
     static final double MAX_COORDINATE = 30_000_000.0;
     private static final double DEFAULT_END_SEC = 10.0;
@@ -66,6 +68,8 @@ final class PlayForm {
 
     Mode mode = Mode.PLAY;
     String targets = "@s";
+    /** Selector distance, blocks; 0 = no limit. Applied only to selectors that support it. */
+    double distanceBlocks;
     @Nullable
     Identifier sound;
     SoundCategory category = SoundCategory.MASTER;
@@ -150,6 +154,7 @@ final class PlayForm {
         dto.name = name;
         dto.mode = mode.literal();
         dto.targets = targets;
+        dto.distanceBlocks = distanceBlocks;
         dto.sound = sound == null ? "" : sound.toString();
         dto.category = category.getName();
         dto.volume = volume;
@@ -171,6 +176,7 @@ final class PlayForm {
             entity = null;
         }
         targets = dto.targets;
+        distanceBlocks = Numbers.clamp(dto.distanceBlocks, 0.0, MAX_DISTANCE_BLOCKS);
         sound = Identifier.tryParse(dto.sound);
         category = parseCategory(dto.category);
         volume = (float) Numbers.clamp(dto.volume, 0.0, MAX_VOLUME);
